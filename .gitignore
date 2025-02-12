@@ -1,0 +1,5 @@
+# ignore images folder
+images/
+
+# ignore data folder
+data/
