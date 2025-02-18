@@ -81,7 +81,9 @@ class CrossAttention(nn.Module):
         interim_shape = (batch_size, -1, self.n_heads, self.d_head)
 
         # (Batch_size, seq_len, dim) --> (Batch_size, seq_len, dim * 3) --> 3 tensors of shape (Batch_size, seq_len, dim)
-        q, k , v = self.in_proj(x).chunk(3, dim=-1)
+        q = self.q_proj(x)
+        k = self.k_proj(y)
+        v = self.v_proj(y)
 
         # (Batch_size, seq_len, Dim) --> (batch_size, seq_len, H, dim / H) --> (batch_size, H, seq_len, dim / H)
         q = q.view(interim_shape).transpose(1, 2)
@@ -91,11 +93,6 @@ class CrossAttention(nn.Module):
         # (batch_size, H, seq_len, seq_len)
         weight = q @ k.transpose(-1, -2)
 
-        if causal_mask:
-            # Mask where the upper triangle (values above the diagonal) is made up of 1
-            mask = torch.ones_like(weight, dtype=torch.bool).triu(1)
-            weight.masked_fill(mask, -torch.inf)
-
         weight /= math.sqrt(self.d_head)
 
         weight = F.softmax(weight, dim=-1)
@@ -104,10 +101,10 @@ class CrossAttention(nn.Module):
         output = weight @ v
         
         # (batch_size, H, seq_len, dim / H)  --> (batch_size, seq_len, H, dim / H)
-        output = output.transpose(1, 2)
+        output = output.transpose(1, 2).contiguous()
 
         # (batch_size, seq_len, H, dim / H) --> (batch_size, seq_len, dim)
-        output = output.reshape(input_shape)
+        output = output.view(input_shape)
 
         output = self.out_proj(output)
 
